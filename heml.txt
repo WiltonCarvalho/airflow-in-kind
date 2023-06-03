@@ -1,0 +1,40 @@
+#########################################################
+## NFS Operator
+curl -fsSL  https://openebs.github.io/charts/nfs-operator.yaml | sed 's/openebs-hostpath/standard/g' | kubectl apply -f -
+kubectl apply -f https://raw.githubusercontent.com/openebs/dynamic-nfs-provisioner/develop/deploy/kubectl/busybox-openebs-rwx.yaml
+#########################################################
+kubectl delete -f https://raw.githubusercontent.com/openebs/dynamic-nfs-provisioner/develop/deploy/kubectl/busybox-openebs-rwx.yaml
+kubectl delete -f https://openebs.github.io/charts/nfs-operator.yaml
+#########################################################
+
+kubectl patch storageclass standard -p '{"metadata": {"annotations":{"storageclass.kubernetes.io/is-default-class":"false"}}}'
+kubectl patch storageclass openebs-rwx -p '{"metadata": {"annotations":{"storageclass.kubernetes.io/is-default-class":"true"}}}'
+kubectl get sc
+
+
+helm repo add apache-airflow https://airflow.apache.org
+helm repo update
+helm search repo -l airflow
+
+helm show values apache-airflow/airflow > values.yaml
+
+helm install airflow apache-airflow/airflow --version 1.9.0 --namespace airflow --create-namespace -f values.yaml \
+  --set images.airflow.repository=localhost:32000/airflow \
+  --set images.airflow.tag=latest
+
+#########################################################
+helm install airflow apache-airflow/airflow --version 1.9.0 --namespace airflow --create-namespace \
+  --set-string "env[0].name=AIRFLOW__CORE__LOAD_EXAMPLES" \
+  --set-string "env[0].value=True" \
+  --set dags.persistence.storageClassName=openebs-rwx \
+  --set logs.persistence.storageClassName=openebs-rwx \
+  --set workers.persistence.storageClassName=openebs-rwx \
+  --set triggerer.persistence.storageClassName=openebs-rwx \
+  --set redis.persistence.storageClassName=openebs-rwx
+#########################################################
+
+helm search repo airflow
+
+kubectl port-forward svc/airflow-webserver 8080:8080 -n airflow
+
+helm -n airflow uninstall airflow

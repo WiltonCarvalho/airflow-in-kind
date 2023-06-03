@@ -37,20 +37,24 @@ nodes:
       - "172.29.50.162"
       - "k8s.domain.com"
 - role: worker
-#- role: worker
+- role: worker
 containerdConfigPatches:
 - |-
   [plugins."io.containerd.grpc.v1.cri".registry.mirrors."localhost:32000"]
     endpoint = ["http://localhost:32000"]
 EOF
 
+mkdir -p ~/.kube
+
 kind get kubeconfig > ~/.kube/config || kind create cluster --image kindest/node:v1.27.1 --config ~/kind-config.yaml
 sed 's/0.0.0.0/127.0.0.1/g' -i ~/.kube/config
-mkdir -p ~/.kube
+
 test "$(uname -m) = x86_64" && wget https://dl.k8s.io/release/v1.27.1/bin/linux/amd64/kubectl -O /usr/local/bin/kubectl
 chmod +x /usr/local/bin/kubectl
+
 curl -fsSL https://get.helm.sh/helm-v3.8.1-linux-amd64.tar.gz | \
   sudo tar zxvf - -C "/usr/local/bin" linux-amd64/helm --strip-components 1
+
 kubectl cluster-info
 kubectl get nodes
 
@@ -113,20 +117,21 @@ kubectl delete -f test-ingress.yaml
 docker run -d --rm --name nfs-server \
   --net=kind \
   --privileged \
-  -v /nfsroot \
+  -v $PWD/nfsroot:/nfsroot \
   -e CUSTOM_EXPORTS_CONFIG="/nfsroot *(fsid=0,rw,async,no_subtree_check,root_squash,anonuid=65534,anongid=65534)" \
   -e SHARED_DIRECTORY=/nfsroot \
   -e FILEPERMISSIONS_UID=65534 \
   -e FILEPERMISSIONS_GID=65534 \
-  -e FILEPERMISSIONS_MODE=770 \
-  -p 2049:2049 \
+  -e FILEPERMISSIONS_MODE=775 \
   openebs/nfs-server-alpine:0.10.0
 
 #### NFS Directories
-docker exec -it kind-control-plane bash
+docker exec -it kind-control-plane bash -c "
 mount -t nfs4 nfs-server:/ /mnt
-mkdir --mode=770 /mnt/airflow-dags /mnt/airflow-logs
-umount /mnt
+mkdir --mode=775 /mnt/airflow-dags /mnt/airflow-logs
+umount /mnt"
+
+ls -lh nfsroot
 #############################################################################
 
 helm repo add csi-driver-nfs \
@@ -156,9 +161,25 @@ kubectl apply -f alpine.yaml
 
 kubectl -n airflow logs deployments/alpine
 
+kubectl delete -f alpine.yaml
+
 kubectl -n default port-forward deployment/registry 32000:5000
 
-docker build -t localhost:32000/airflow:latest .
+
+docker build \
+  --pull \
+  --build-arg PYTHON_BASE_IMAGE="python:3.10-slim-bullseye" \
+  --build-arg AIRFLOW_VERSION="2.6.1" \
+  --build-arg AIRFLOW_EXTRAS="kubernetes,mysql" \
+  --build-arg ADDITIONAL_AIRFLOW_EXTRAS="" \
+  --build-arg ADDITIONAL_PYTHON_DEPS="" \
+  --tag "airflow:2.6.1" \
+  --progress=plain \
+  github.com/apache/airflow#main
+
+docker build -t airflow:2.6.1 --progress=plain .
+
+docker tag airflow:2.6.1 localhost:32000/airflow:latest
 docker push localhost:32000/airflow:latest
 
 kubectl apply -f airflow.yaml
@@ -193,16 +214,16 @@ EOF
 
 kubectl apply -f airflow-ingress.yaml
 
-echo https://$NODE_IP
+https://localhost
 
+kubectl -n airflow get pods -l app=airflow -o jsonpath='{.items[0].metadata.name}' | read airflow_pod
+
+kubectl cp example_kubernetes_executor.py airflow/$airflow_pod:/opt/airflow/dags
+kubectl cp test_dag_k8s.py airflow/$airflow_pod:/opt/airflow/dags
 
 #########################################################
 docker stop nfs-server
 kind delete cluster
+sudo rm -rf nfsroot
 #########################################################
 
-#########################################################
-## NFS Operator
-curl -fsSL  https://openebs.github.io/charts/nfs-operator.yaml | sed 's/openebs-hostpath/standard/g' | kubectl apply -f -
-kubectl delete -f https://openebs.github.io/charts/nfs-operator.yaml
-#########################################################

@@ -1,9 +1,8 @@
-FROM apache/airflow:2.3.3-python3.10
+FROM apache/airflow:2.6.1-python3.10
 ENV TZ=America/Sao_Paulo
-RUN set -ex \
-    && pip install --no-cache-dir \
-        'apache-airflow[crypto,kubernetes,mysql,pandas]==2.3.3' \
-        --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-2.3.3/constraints-3.10.txt"
+# RUN set -ex \
+#     &&  AIRFLOW_VERSION=2.6.1 \
+#         PYTHON_VERSION="$(python --version | cut -d " " -f 2 | cut -d "." -f 1-2)" \
+#         CONSTRAINT_URL="https://raw.githubusercontent.com/apache/airflow/constraints-${AIRFLOW_VERSION}/constraints-${PYTHON_VERSION}.txt" \
+#     && pip install --no-cache-dir "apache-airflow[kubernetes,mysql]==${AIRFLOW_VERSION}" --constraint "${CONSTRAINT_URL}"
 COPY --chown=airflow:root pod_template.yaml /opt/airflow/pod_template.yaml
-ARG EXAMPLE_DAGS="/home/airflow/.local/lib/python3.10/site-packages/airflow/example_dags/"
-COPY --chown=airflow:root test_dag_*.py $EXAMPLE_DAGS
