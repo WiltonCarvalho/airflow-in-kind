@@ -1,0 +1,81 @@
+---
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: nfs-airflow
+  namespace: airflow
+provisioner: nfs.csi.k8s.io
+parameters:
+  server: nfs-server
+  share: /
+reclaimPolicy: Retain
+volumeBindingMode: Immediate
+mountOptions:
+  - hard
+  - nfsvers=4.1
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: airflow-dags
+  namespace: airflow
+spec:
+  storageClassName: nfs-airflow
+  accessModes:
+    - ReadOnlyMany
+  resources:
+    requests:
+      storage: 1Gi
+  volumeName: airflow-dags
+---
+kind: PersistentVolume
+apiVersion: v1
+metadata:
+  name: airflow-dags
+  namespace: airflow
+spec:
+  storageClassName: nfs-airflow
+  accessModes:
+    - ReadOnlyMany
+  capacity:
+    storage: 1Gi
+  mountOptions:
+    - hard
+    - nfsvers=4.1
+  nfs:
+    server: nfs-server
+    path: "/airflow-dags"
+    readOnly: false
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: airflow-logs
+  namespace: airflow
+spec:
+  storageClassName: nfs-airflow
+  accessModes:
+    - ReadOnlyMany
+  resources:
+    requests:
+      storage: 1Gi
+  volumeName: airflow-logs
+---
+kind: PersistentVolume
+apiVersion: v1
+metadata:
+  name: airflow-logs
+  namespace: airflow
+spec:
+  storageClassName: nfs-airflow
+  accessModes:
+    - ReadOnlyMany
+  capacity:
+    storage: 1Gi
+  mountOptions:
+    - hard
+    - nfsvers=4.1
+  nfs:
+    server: nfs-server
+    path: "/airflow-logs"
+    readOnly: false

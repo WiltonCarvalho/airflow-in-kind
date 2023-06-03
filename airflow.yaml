@@ -1,0 +1,157 @@
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: airflow
+  namespace: airflow
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: airflow
+  namespace: airflow
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "watch", "list"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "watch", "list"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["pods/exec"]
+    verbs: ["get", "create"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get", "list"]
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: airflow
+  namespace: airflow
+subjects:
+  - kind: ServiceAccount
+    name: airflow
+roleRef:
+  kind: Role
+  name: airflow
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: airflow
+  namespace: airflow
+  labels:
+    app: airflow
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: airflow
+  template:
+    metadata:
+      labels:
+        app: airflow
+    spec:
+      #nodeName: kind-control-plane
+      volumes:
+      - name: airflow-dags
+        persistentVolumeClaim:
+          claimName: airflow-dags
+      - name: airflow-logs
+        persistentVolumeClaim:
+          claimName: airflow-logs
+      serviceAccountName: airflow
+      initContainers:
+      - name: "init"
+        image: localhost:32000/airflow:latest
+        imagePullPolicy: Always
+        envFrom:
+        - configMapRef:
+            name: airflow-config
+        env:
+        - name: AIRFLOW__CORE__SQL_ALCHEMY_CONN
+          valueFrom:
+            secretKeyRef:
+              name: airflow-secrets
+              key: sql_alchemy_conn
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            set -ex
+            airflow db init
+            airflow users create --username airflow --firstname airflow --lastname airflow --role Admin --password airflow --email admin@airflow.org
+        volumeMounts:
+        - name: airflow-dags
+          mountPath: /opt/airflow/dags
+        - name: airflow-logs
+          mountPath: /opt/airflow/logs
+        securityContext:
+          runAsGroup: 0
+      containers:
+      - name: webserver
+        image: localhost:32000/airflow:latest
+        imagePullPolicy: Always
+        command: ["airflow","webserver"]
+        envFrom:
+        - configMapRef:
+            name: airflow-config
+        env:
+        - name: AIRFLOW__DATABASE__SQL_ALCHEMY_CONN
+          valueFrom:
+            secretKeyRef:
+              name: airflow-secrets
+              key: sql_alchemy_conn
+        volumeMounts:
+        - name: airflow-dags
+          mountPath: /opt/airflow/dags
+        - name: airflow-logs
+          mountPath: /opt/airflow/logs
+        securityContext:
+          runAsGroup: 0
+      - name: scheduler
+        image: localhost:32000/airflow:latest
+        imagePullPolicy: Always
+        command: ["airflow","scheduler"]
+        envFrom:
+        - configMapRef:
+            name: airflow-config
+        env:
+        - name: AIRFLOW__CORE__SQL_ALCHEMY_CONN
+          valueFrom:
+            secretKeyRef:
+              name: airflow-secrets
+              key: sql_alchemy_conn
+        volumeMounts:
+        - name: airflow-dags
+          mountPath: /opt/airflow/dags
+        - name: airflow-logs
+          mountPath: /opt/airflow/logs
+        securityContext:
+          runAsGroup: 0
+      volumes:
+      - name: airflow-dags
+        persistentVolumeClaim:
+          claimName: airflow-dags
+      - name: airflow-logs
+        persistentVolumeClaim:
+          claimName: airflow-logs
+      # imagePullSecrets:
+      # - name: airflow-ocir-secret
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: airflow
+  namespace: airflow
+spec:
+  type: NodePort
+  #type: LoadBalancer
+  ports:
+    - port: 8080
+  selector:
+    app: airflow

@@ -1,0 +1,46 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: alpine
+  name: alpine
+  namespace: airflow
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: alpine
+  template:
+    metadata:
+      labels:
+        app: alpine
+    spec:
+      # nodeName: kind-control-plane
+      terminationGracePeriodSeconds: 1
+      volumes:
+      - name: airflow-dags
+        persistentVolumeClaim:
+          claimName: airflow-dags
+      - name: airflow-logs
+        persistentVolumeClaim:
+          claimName: airflow-logs
+      containers:
+      - name: alpine
+        image: alpine
+        command:
+          - sh
+          - -c
+          - |
+            set -ex
+            sleep 3
+            df -h | grep -e Filesystem -e airflow
+            exec sleep infinity
+        volumeMounts:
+        - name: airflow-dags
+          mountPath: /mnt/airflow-dags
+        - name: airflow-logs
+          mountPath: /mnt/airflow-logs
+        securityContext:
+          runAsUser: 1000
+          runAsGroup: 0
