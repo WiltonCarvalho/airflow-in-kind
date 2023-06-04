@@ -170,12 +170,12 @@ docker build \
   --pull \
   --build-arg PYTHON_BASE_IMAGE="python:3.10-slim-bullseye" \
   --build-arg AIRFLOW_VERSION="2.6.1" \
-  --build-arg AIRFLOW_EXTRAS="kubernetes,mysql" \
+  --build-arg AIRFLOW_EXTRAS="cncf.kubernetes,mysql" \
   --build-arg ADDITIONAL_AIRFLOW_EXTRAS="" \
   --build-arg ADDITIONAL_PYTHON_DEPS="" \
   --tag "airflow:2.6.1" \
   --progress=plain \
-  github.com/apache/airflow#main
+  github.com/apache/airflow#v2-6-stable
 
 docker build -t airflow:2.6.1 --progress=plain .
 
