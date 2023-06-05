@@ -47,6 +47,7 @@ EOF
 mkdir -p ~/.kube
 
 kind get kubeconfig > ~/.kube/config || kind create cluster --image kindest/node:v1.27.1 --config ~/kind-config.yaml
+
 sed 's/0.0.0.0/127.0.0.1/g' -i ~/.kube/config
 
 test "$(uname -m) = x86_64" && wget https://dl.k8s.io/release/v1.27.1/bin/linux/amd64/kubectl -O /usr/local/bin/kubectl
@@ -173,7 +174,7 @@ docker build \
   --build-arg AIRFLOW_EXTRAS="cncf.kubernetes,mysql" \
   --build-arg ADDITIONAL_AIRFLOW_EXTRAS="" \
   --build-arg ADDITIONAL_PYTHON_DEPS="" \
-  --tag "airflow:2.6.1" \
+  --tag "apache/airflow:2.6.1-python3.10" \
   --progress=plain \
   github.com/apache/airflow#v2-6-stable
 
